@@ -653,3 +653,157 @@ h2.game-over-title {
   box-shadow: 0 0 6px var(--neon-cyan);
 }
 
+/* Multiplayer Lobby Styling */
+.lobby-tabs {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.lobby-tab {
+  flex: 1;
+  padding: 10px 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.lobby-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lobby-tab.active {
+  color: #060913;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+}
+
+.lobby-sub-panel {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: left;
+}
+
+.lobby-sub-panel.hidden {
+  display: none !important;
+}
+
+.room-code-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.room-code-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.room-code-value {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 1.3rem;
+  color: var(--neon-green);
+  font-weight: 800;
+  text-shadow: 0 0 8px rgba(57, 255, 20, 0.3);
+}
+
+.mini-btn {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mini-btn:hover {
+  background: var(--neon-cyan);
+  color: #060913;
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.connected-players-box {
+  margin-top: 10px;
+}
+
+.panel-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+#connected-players-list {
+  list-style: none;
+  max-height: 100px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.15);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+#connected-players-list li {
+  font-size: 0.85rem;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+}
+
+#connected-players-list li:last-child {
+  border-bottom: none;
+}
+
+.connection-status {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--neon-yellow);
+  text-shadow: 0 0 5px rgba(255, 240, 31, 0.2);
+  margin-top: 10px;
+  min-height: 20px;
+  font-weight: 600;
+}
+
+.connection-status.error {
+  color: var(--neon-magenta);
+  text-shadow: 0 0 5px rgba(255, 0, 127, 0.2);
+}
+
+.connection-status.success {
+  color: var(--neon-green);
+  text-shadow: 0 0 5px rgba(57, 255, 20, 0.2);
+}
+
+.hidden {
+  display: none !important;
+}
+

@@ -70,10 +70,34 @@ class SlitherGame {
       currY: 0,
       angle: 0
     };
+
+    // Multiplayer State
+    this.multiplayerMode = 'solo'; // 'solo', 'host', 'client'
+    this.peer = null;
+    this.connections = {}; // Host: client peer ID -> connection
+    this.connToHost = null; // Client: connection to Host
+    this.roomId = null;
+    this.currentRoomCode = null;
+    this.clientInputs = {}; // Host: client peer ID -> { angle, isBoosting }
+    this.clientNames = {}; // Host: client peer ID -> name
+    this.clientSkins = {}; // Host: client peer ID -> skinIndex
     
     this.setupEvents();
     this.resizeCanvas();
     this.initSkinSelector();
+
+    // Check for room param in URL to auto-fill join code
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+      setTimeout(() => {
+        this.switchLobbyTab('join');
+        const roomInput = document.getElementById('room-input');
+        if (roomInput) {
+          roomInput.value = roomParam;
+        }
+      }, 100);
+    }
     
     // Loop
     requestAnimationFrame((t) => this.loop(t));
@@ -112,6 +136,33 @@ class SlitherGame {
       this.audio.playClick();
       this.startGame();
     });
+
+    // Multiplayer tabs
+    const tabSolo = document.getElementById('tab-solo');
+    const tabHost = document.getElementById('tab-host');
+    const tabJoin = document.getElementById('tab-join');
+    
+    if (tabSolo) tabSolo.addEventListener('click', () => { this.audio.playClick(); this.switchLobbyTab('solo'); });
+    if (tabHost) tabHost.addEventListener('click', () => { this.audio.playClick(); this.switchLobbyTab('host'); });
+    if (tabJoin) tabJoin.addEventListener('click', () => { this.audio.playClick(); this.switchLobbyTab('join'); });
+    
+    // Copy Link button
+    const copyBtn = document.getElementById('copy-link-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        if (!this.roomId) return;
+        this.audio.playClick();
+        const inviteLink = `${window.location.origin}${window.location.pathname}?room=${this.roomId}`;
+        navigator.clipboard.writeText(inviteLink).then(() => {
+          copyBtn.innerText = 'Copied!';
+          setTimeout(() => {
+            copyBtn.innerText = 'Copy Link';
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy link:', err);
+        });
+      });
+    }
     
     // Touch Events for Mobile Controls
     const container = document.getElementById('game-container');
@@ -213,15 +264,29 @@ class SlitherGame {
   
   setPlayerBoosting(isBoosting) {
     if (!this.player) return;
-    if (isBoosting && this.player.mass > 12) {
-      if (!this.player.isBoosting) {
-        this.player.isBoosting = true;
-        this.audio.startBoost();
+    
+    const canBoost = isBoosting && this.player.mass > 12;
+    
+    if (this.multiplayerMode === 'client') {
+      this.player.isBoosting = canBoost;
+      if (this.connToHost && this.connToHost.open) {
+        this.connToHost.send({
+          type: 'input',
+          angle: this.player.targetAngle,
+          isBoosting: canBoost
+        });
       }
     } else {
-      if (this.player.isBoosting) {
-        this.player.isBoosting = false;
-        this.audio.stopBoost();
+      if (isBoosting && this.player.mass > 12) {
+        if (!this.player.isBoosting) {
+          this.player.isBoosting = true;
+          this.audio.startBoost();
+        }
+      } else {
+        if (this.player.isBoosting) {
+          this.player.isBoosting = false;
+          this.audio.stopBoost();
+        }
       }
     }
   }
@@ -247,30 +312,83 @@ class SlitherGame {
   startGame() {
     const name = this.nicknameInput.value.trim() || 'Wormy';
     
+    if (this.multiplayerMode === 'client') {
+      if (!this.connToHost || !this.connToHost.open) {
+        const roomInput = document.getElementById('room-input');
+        const code = this.currentRoomCode || (roomInput ? roomInput.value.trim() : '');
+        if (!code) {
+          alert('Please enter a Room Code!');
+          return;
+        }
+        this.currentRoomCode = code;
+        this.connectToHost(code);
+        return; // connectToHost will call startGame() once connected
+      }
+    }
+    
     // Reset values
     this.kills = 0;
     this.startTime = Date.now();
-    this.food = [];
-    this.snakes = [];
-    this.items = [];
     
-    // Create Player
-    this.player = this.createWorm(0, 0, name, false, this.selectedSkin);
-    this.snakes.push(this.player);
-    
-    // Create AI Bots
-    for (let i = 0; i < BOT_COUNT; i++) {
-      this.spawnBot();
-    }
-    
-    // Populate food
-    for (let i = 0; i < MAX_FOOD; i++) {
-      this.spawnFood();
-    }
-    
-    // Populate items
-    for (let i = 0; i < MAX_ITEMS; i++) {
-      this.spawnItem();
+    if (this.multiplayerMode === 'solo') {
+      this.food = [];
+      this.snakes = [];
+      this.items = [];
+      
+      // Create Player
+      this.player = this.createWorm(0, 0, name, false, this.selectedSkin);
+      this.snakes.push(this.player);
+      
+      // Create AI Bots
+      for (let i = 0; i < BOT_COUNT; i++) {
+        this.spawnBot();
+      }
+      
+      // Populate food
+      for (let i = 0; i < MAX_FOOD; i++) {
+        this.spawnFood();
+      }
+      
+      // Populate items
+      for (let i = 0; i < MAX_ITEMS; i++) {
+        this.spawnItem();
+      }
+    } else if (this.multiplayerMode === 'host') {
+      this.food = [];
+      this.snakes = [];
+      this.items = [];
+      
+      // Create Host Player
+      this.player = this.createWorm(0, 0, name, false, this.selectedSkin);
+      this.snakes.push(this.player);
+      
+      // Create AI Bots
+      for (let i = 0; i < BOT_COUNT; i++) {
+        this.spawnBot();
+      }
+      
+      // Populate food
+      for (let i = 0; i < MAX_FOOD; i++) {
+        this.spawnFood();
+      }
+      
+      // Populate items
+      for (let i = 0; i < MAX_ITEMS; i++) {
+        this.spawnItem();
+      }
+      
+      // Spawn any clients that connected while in menu
+      for (let peerId in this.connections) {
+        const clientName = this.clientNames[peerId] || 'Guest';
+        const clientSkin = this.clientSkins[peerId] || 0;
+        this.spawnClientSnake(peerId, clientName, clientSkin);
+      }
+    } else if (this.multiplayerMode === 'client') {
+      // Clients don't run any local setup; they wait for host states
+      this.food = [];
+      this.snakes = [];
+      this.items = [];
+      this.player = null;
     }
     
     // Hide menus
@@ -407,7 +525,7 @@ class SlitherGame {
     const dt = time - this.lastTime;
     this.lastTime = time;
     
-    if (this.gameState === 'playing') {
+    if (this.gameState === 'playing' || (this.multiplayerMode === 'host' && this.gameState === 'gameover')) {
       this.update(dt);
       this.draw();
     } else {
@@ -422,7 +540,22 @@ class SlitherGame {
     // Calculate delta-time speed scale factor (60 FPS base)
     this.speedScale = Math.min(3.0, dt / 16.67);
 
-    // Update powerup active timers
+    if (this.multiplayerMode === 'client') {
+      this.updatePlayerAngle();
+      
+      // Clients update camera tracking based on host-sent coordinates
+      if (this.player) {
+        this.camera.x += (this.player.x - this.camera.x) * 0.15;
+        this.camera.y += (this.player.y - this.camera.y) * 0.15;
+        const targetZoom = Math.max(0.45, 1.0 - (this.player.mass - 10) * 0.0006);
+        this.camera.zoom += (targetZoom - this.camera.zoom) * 0.08;
+      }
+      
+      this.updateHUD();
+      return;
+    }
+
+    // Solo or Host updates powerup active timers
     for (let s of this.snakes) {
       if (s.magnetTimer > 0) s.magnetTimer = Math.max(0, s.magnetTimer - dt);
       if (s.shieldTimer > 0) s.shieldTimer = Math.max(0, s.shieldTimer - dt);
@@ -458,6 +591,24 @@ class SlitherGame {
       // Zoom out slowly as player grows
       const targetZoom = Math.max(0.45, 1.0 - (this.player.mass - 10) * 0.0006);
       this.camera.zoom += (targetZoom - this.camera.zoom) * 0.08;
+    } else if (this.multiplayerMode === 'host' && this.snakes.length > 0) {
+      // Spectator camera follows the largest snake
+      const sorted = [...this.snakes].sort((a, b) => b.mass - a.mass);
+      const followSnake = sorted[0];
+      this.camera.x += (followSnake.x - this.camera.x) * 0.15;
+      this.camera.y += (followSnake.y - this.camera.y) * 0.15;
+      const targetZoom = Math.max(0.45, 1.0 - (followSnake.mass - 10) * 0.0006);
+      this.camera.zoom += (targetZoom - this.camera.zoom) * 0.08;
+    }
+    
+    // Broadcast state to clients if Host
+    if (this.multiplayerMode === 'host') {
+      if (!this.broadcastFrameCount) this.broadcastFrameCount = 0;
+      this.broadcastFrameCount++;
+      if (this.broadcastFrameCount >= 3) {
+        this.broadcastFrameCount = 0;
+        this.broadcastState();
+      }
     }
     
     // Update HTML overlay elements
@@ -478,12 +629,27 @@ class SlitherGame {
     if (Math.hypot(dx, dy) > 15) {
       this.player.targetAngle = Math.atan2(dy, dx);
     }
+    
+    // Send input to host if in client mode
+    if (this.multiplayerMode === 'client' && this.connToHost && this.connToHost.open) {
+      this.connToHost.send({
+        type: 'input',
+        angle: this.player.targetAngle,
+        isBoosting: this.player.isBoosting
+      });
+    }
   }
   
   updateSnakes() {
     for (let s of this.snakes) {
       if (s.isBot) {
         this.runBotAI(s);
+      } else if (s.id !== 'player') {
+        const clientInput = this.clientInputs[s.id];
+        if (clientInput) {
+          s.targetAngle = clientInput.angle;
+          s.isBoosting = clientInput.isBoosting;
+        }
       }
       
       // Smooth angle interpolation scaled by delta time
@@ -752,11 +918,24 @@ class SlitherGame {
             if (s2.id === 'player' && !deadSnakes.has(s2)) {
               this.kills++;
               this.pushKillNotification('Player', s1.name, true);
+              if (this.multiplayerMode === 'host') {
+                this.broadcastNotification('Player', s1.name, true);
+              }
             } else if (s1.id === 'player') {
               this.pushKillNotification(s2.name, 'Player', false);
+              if (this.multiplayerMode === 'host') {
+                this.broadcastNotification(s2.name, 'Player', false);
+              }
             } else {
-              // Bot killed Bot
-              this.pushKillNotification(s2.name, s1.name, false);
+              const s2IsClient = this.connections[s2.id] !== undefined;
+              const s1IsClient = this.connections[s1.id] !== undefined;
+              const killerName = s2IsClient ? (this.clientNames[s2.id] || s2.name) : s2.name;
+              const victimName = s1IsClient ? (this.clientNames[s1.id] || s1.name) : s1.name;
+              
+              this.pushKillNotification(killerName, victimName, false);
+              if (this.multiplayerMode === 'host') {
+                this.broadcastNotification(killerName, victimName, false);
+              }
             }
             break;
           }
@@ -811,7 +990,8 @@ class SlitherGame {
     
     // Rank calculation
     const sorted = [...this.snakes].sort((a, b) => b.mass - a.mass);
-    const pRank = sorted.findIndex(s => s.id === 'player') + 1;
+    const pId = (this.multiplayerMode === 'client' && this.peer) ? this.peer.id : 'player';
+    const pRank = sorted.findIndex(s => s.id === pId) + 1;
     document.getElementById('stat-rank').innerText = `${pRank}/${this.snakes.length}`;
     
     // 2. Leaderboard (Top 10)
@@ -823,7 +1003,8 @@ class SlitherGame {
     const topTen = sorted.slice(0, 10);
     topTen.forEach((s, idx) => {
       const li = document.createElement('li');
-      li.className = `leaderboard-item ${s.id === 'player' ? 'player-rank' : ''}`;
+      const isSelf = s.id === pId;
+      li.className = `leaderboard-item ${isSelf ? 'player-rank' : ''}`;
       
       li.innerHTML = `
         <span class="leaderboard-rank">${idx + 1}</span>
@@ -899,7 +1080,8 @@ class SlitherGame {
     
     // Draw snakes
     for (let s of this.snakes) {
-      const isPlayer = s.id === 'player';
+      const pId = (this.multiplayerMode === 'client' && this.peer) ? this.peer.id : 'player';
+      const isPlayer = s.id === pId;
       const mx = w / 2 + (s.x / MAP_SIZE) * (w / 2 - 4);
       const my = h / 2 + (s.y / MAP_SIZE) * (h / 2 - 4);
       
@@ -1281,6 +1463,405 @@ class SlitherGame {
       g: (num >> 8) & 255,
       b: num & 255
     };
+  }
+
+  // ==========================================
+  // MULTIPLAYER NETWORKING LAYER (PEERJS WebRTC)
+  // ==========================================
+  
+  switchLobbyTab(tab) {
+    document.querySelectorAll('.lobby-tab').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.lobby-sub-panel').forEach(el => el.classList.add('hidden'));
+    
+    const targetTab = document.getElementById(`tab-${tab}`);
+    if (targetTab) targetTab.classList.add('active');
+    
+    const hostPanel = document.getElementById('host-panel');
+    const joinPanel = document.getElementById('join-panel');
+    const startBtn = document.getElementById('start-btn');
+    
+    if (tab === 'solo') {
+      this.multiplayerMode = 'solo';
+      if (startBtn) {
+        startBtn.innerText = 'Enter Arena';
+        startBtn.disabled = false;
+      }
+      if (this.peer) {
+        this.peer.destroy();
+        this.peer = null;
+      }
+    } else if (tab === 'host') {
+      this.multiplayerMode = 'host';
+      if (startBtn) {
+        startBtn.innerText = 'Host & Play';
+        startBtn.disabled = true; // Disabled until peer ID is generated
+      }
+      if (hostPanel) hostPanel.classList.remove('hidden');
+      
+      if (!this.peer || this.peer.destroyed) {
+        this.initHostPeer();
+      } else if (this.roomId) {
+        const display = document.getElementById('room-code-display');
+        if (display) display.innerText = this.roomId;
+        if (startBtn) startBtn.disabled = false;
+      }
+    } else if (tab === 'join') {
+      this.multiplayerMode = 'client';
+      if (startBtn) {
+        startBtn.innerText = 'Join & Play';
+        startBtn.disabled = false;
+      }
+      if (joinPanel) joinPanel.classList.remove('hidden');
+      if (this.peer && !this.peer.destroyed) {
+        this.peer.destroy();
+        this.peer = null;
+      }
+    }
+  }
+
+  initHostPeer() {
+    const display = document.getElementById('room-code-display');
+    if (display) display.innerText = 'Generating...';
+    
+    const attemptConnection = () => {
+      const shortId = Math.floor(1000 + Math.random() * 9000).toString();
+      this.roomId = shortId;
+      
+      this.peer = new Peer('slither-' + shortId);
+      
+      this.peer.on('open', (id) => {
+        if (display) display.innerText = shortId;
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) startBtn.disabled = false;
+        this.updateConnectedPlayersList();
+      });
+      
+      this.peer.on('connection', (conn) => {
+        this.handleIncomingConnection(conn);
+      });
+      
+      this.peer.on('error', (err) => {
+        if (err.type === 'id-taken') {
+          this.peer.destroy();
+          attemptConnection();
+        } else {
+          if (display) display.innerText = 'Error!';
+          console.error('PeerJS error:', err);
+        }
+      });
+    };
+    
+    attemptConnection();
+  }
+
+  handleIncomingConnection(conn) {
+    conn.on('open', () => {
+      this.connections[conn.peer] = conn;
+      this.clientInputs[conn.peer] = { angle: 0, isBoosting: false };
+      this.updateConnectedPlayersList();
+    });
+    
+    conn.on('data', (data) => {
+      if (data.type === 'join') {
+        this.clientNames[conn.peer] = data.name;
+        this.clientSkins[conn.peer] = data.skin;
+        
+        if (this.gameState === 'playing') {
+          this.spawnClientSnake(conn.peer, data.name, data.skin);
+        }
+        this.updateConnectedPlayersList();
+      } else if (data.type === 'input') {
+        if (this.clientInputs[conn.peer]) {
+          this.clientInputs[conn.peer].angle = data.angle;
+          this.clientInputs[conn.peer].isBoosting = data.isBoosting;
+        }
+      }
+    });
+    
+    conn.on('close', () => {
+      this.removeClientSnake(conn.peer);
+      delete this.connections[conn.peer];
+      delete this.clientInputs[conn.peer];
+      delete this.clientNames[conn.peer];
+      delete this.clientSkins[conn.peer];
+      this.updateConnectedPlayersList();
+    });
+    
+    conn.on('error', (err) => {
+      console.error('Connection error for peer ' + conn.peer + ':', err);
+    });
+  }
+
+  spawnClientSnake(peerId, name, skinIndex) {
+    if (this.snakes.some(s => s.id === peerId)) return;
+    
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * (MAP_SIZE - 400);
+    const x = Math.cos(angle) * dist;
+    const y = Math.sin(angle) * dist;
+    
+    const snake = this.createWorm(x, y, name, false, skinIndex);
+    snake.id = peerId;
+    this.snakes.push(snake);
+    
+    this.audio.playPowerUp();
+    this.broadcastSound('powerup');
+  }
+
+  removeClientSnake(peerId) {
+    const victim = this.snakes.find(s => s.id === peerId);
+    if (victim) {
+      this.handleWormDeath(victim);
+    }
+  }
+
+  broadcastState() {
+    if (Object.keys(this.connections).length === 0) return;
+    
+    const serializedSnakes = this.snakes.map(s => ({
+      id: s.id,
+      name: s.name,
+      x: s.x,
+      y: s.y,
+      angle: s.angle,
+      segments: s.segments.map(seg => ({ x: seg.x, y: seg.y, radius: seg.radius })),
+      mass: s.mass,
+      radius: s.radius,
+      spacing: s.spacing,
+      isBoosting: s.isBoosting,
+      magnetTimer: s.magnetTimer,
+      shieldTimer: s.shieldTimer,
+      skinIndex: s.skinIndex,
+      colorGrad: s.colorGrad,
+      rgbStart: s.rgbStart,
+      rgbEnd: s.rgbEnd
+    }));
+    
+    const serializedFood = this.food.map(f => ({
+      x: f.x,
+      y: f.y,
+      value: f.value,
+      radius: f.radius,
+      isDebris: f.isDebris,
+      color: f.color
+    }));
+    
+    const serializedItems = this.items.map(item => ({
+      x: item.x,
+      y: item.y,
+      type: item.type,
+      radius: item.radius
+    }));
+    
+    const statePayload = {
+      type: 'state',
+      snakes: serializedSnakes,
+      food: serializedFood,
+      items: serializedItems
+    };
+    
+    for (let peerId in this.connections) {
+      const conn = this.connections[peerId];
+      if (conn.open) {
+        conn.send(statePayload);
+      }
+    }
+  }
+
+  broadcastNotification(killerName, victimName, isPlayerKiller) {
+    const payload = {
+      type: 'notification',
+      killerName: killerName,
+      victimName: victimName,
+      isPlayerKiller: isPlayerKiller
+    };
+    for (let peerId in this.connections) {
+      const conn = this.connections[peerId];
+      if (conn.open) {
+        conn.send(payload);
+      }
+    }
+  }
+
+  broadcastSound(soundName) {
+    const payload = {
+      type: 'sound',
+      name: soundName
+    };
+    for (let peerId in this.connections) {
+      const conn = this.connections[peerId];
+      if (conn.open) {
+        conn.send(payload);
+      }
+    }
+  }
+
+  updateConnectedPlayersList() {
+    const list = document.getElementById('connected-players-list');
+    if (!list) return;
+    
+    list.innerHTML = '<li>You (Host)</li>';
+    for (let peerId in this.connections) {
+      const name = this.clientNames[peerId] || 'Guest';
+      const li = document.createElement('li');
+      li.innerText = `${name} (${peerId})`;
+      list.appendChild(li);
+    }
+  }
+
+  connectToHost(hostRoomCode) {
+    const statusEl = document.getElementById('connection-status');
+    if (statusEl) {
+      statusEl.className = 'connection-status';
+      statusEl.innerText = `Connecting to Room ${hostRoomCode}...`;
+    }
+    
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn) startBtn.disabled = true;
+    
+    if (this.peer) {
+      this.peer.destroy();
+    }
+    
+    this.peer = new Peer();
+    
+    this.peer.on('open', (id) => {
+      const conn = this.peer.connect('slither-' + hostRoomCode);
+      this.connToHost = conn;
+      this.setupClientConnection(conn);
+    });
+    
+    this.peer.on('error', (err) => {
+      if (statusEl) {
+        statusEl.className = 'connection-status error';
+        statusEl.innerText = `Connection error: ${err.type}`;
+      }
+      if (startBtn) startBtn.disabled = false;
+    });
+  }
+
+  setupClientConnection(conn) {
+    const statusEl = document.getElementById('connection-status');
+    const startBtn = document.getElementById('start-btn');
+    
+    conn.on('open', () => {
+      if (statusEl) {
+        statusEl.className = 'connection-status success';
+        statusEl.innerText = 'Connected! Joining game...';
+      }
+      if (startBtn) startBtn.disabled = false;
+      
+      const name = this.nicknameInput.value.trim() || 'Wormy';
+      conn.send({
+        type: 'join',
+        name: name,
+        skin: this.selectedSkin
+      });
+      
+      this.startGame();
+    });
+    
+    conn.on('data', (data) => {
+      this.handleHostData(data);
+    });
+    
+    conn.on('close', () => {
+      if (statusEl) {
+        statusEl.className = 'connection-status error';
+        statusEl.innerText = 'Disconnected from host.';
+      }
+      this.endClientGame();
+    });
+    
+    conn.on('error', (err) => {
+      if (statusEl) {
+        statusEl.className = 'connection-status error';
+        statusEl.innerText = `Error: ${err.message}`;
+      }
+    });
+  }
+
+  handleHostData(data) {
+    if (data.type === 'state') {
+      const wasPlaying = this.gameState === 'playing';
+      const oldMass = this.player ? this.player.mass : 0;
+      
+      this.snakes = data.snakes;
+      this.food = data.food;
+      this.items = data.items;
+      
+      const mySnake = this.snakes.find(s => s.id === this.peer.id);
+      
+      if (wasPlaying) {
+        if (!mySnake) {
+          this.audio.playDeath();
+          this.gameState = 'gameover';
+          
+          document.getElementById('res-mass').innerText = Math.floor(oldMass);
+          document.getElementById('res-kills').innerText = this.kills;
+          
+          const elapsedSec = Math.floor((Date.now() - this.startTime) / 1000);
+          document.getElementById('res-time').innerText = `${elapsedSec}s`;
+          
+          this.gameOverScreen.classList.add('visible');
+          
+          if (this.connToHost) {
+            this.connToHost.close();
+          }
+        } else {
+          // Play eat sound on positive mass diff
+          if (mySnake.mass > oldMass + 0.05) {
+            this.audio.playEat();
+          }
+          
+          // Boost sound triggers
+          if (this.player) {
+            if (mySnake.isBoosting && !this.player.isBoosting) {
+              this.audio.startBoost();
+            } else if (!mySnake.isBoosting && this.player.isBoosting) {
+              this.audio.stopBoost();
+            }
+            
+            // Powerup sounds
+            if (mySnake.shieldTimer > 0 && this.player.shieldTimer <= 0) {
+              this.audio.playPowerUp();
+            }
+            if (mySnake.magnetTimer > 0 && this.player.magnetTimer <= 0) {
+              this.audio.playPowerUp();
+            }
+          }
+        }
+      }
+      
+      this.player = mySnake;
+      this.updateHUD();
+      
+    } else if (data.type === 'notification') {
+      const name = this.nicknameInput.value.trim() || 'Wormy';
+      const isLocalKiller = (data.killerName === name);
+      this.pushKillNotification(data.killerName, data.victimName, isLocalKiller);
+      if (isLocalKiller) {
+        this.kills++;
+      }
+    } else if (data.type === 'sound') {
+      if (data.name === 'shieldBreak') {
+        this.audio.playShieldBreak();
+      }
+    }
+  }
+
+  endClientGame() {
+    this.gameState = 'menu';
+    this.menuScreen.classList.remove('hidden');
+    this.gameOverScreen.classList.remove('visible');
+    if (this.connToHost) {
+      this.connToHost.close();
+      this.connToHost = null;
+    }
+    if (this.peer) {
+      this.peer.destroy();
+      this.peer = null;
+    }
   }
 }
 

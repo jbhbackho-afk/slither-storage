@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>NeonSlither.io - Glow and Grow</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
 
@@ -88,6 +89,37 @@
             <div class="skin-option" data-skin="4" style="background: linear-gradient(135deg, #00f0ff, #ff007f);"></div>
             <div class="skin-option" data-skin="5" style="background: linear-gradient(135deg, #ffffff, #8a9ba8);"></div>
           </div>
+        </div>
+
+        <!-- Multiplayer Mode Selector Tabs -->
+        <div class="lobby-tabs">
+          <button class="lobby-tab active" id="tab-solo">Solo Play</button>
+          <button class="lobby-tab" id="tab-host">Host Room</button>
+          <button class="lobby-tab" id="tab-join">Join Room</button>
+        </div>
+
+        <!-- Host Room UI panel -->
+        <div id="host-panel" class="lobby-sub-panel hidden">
+          <div class="room-code-box">
+            <span class="room-code-label">Room Code:</span>
+            <span id="room-code-display" class="room-code-value">Generating...</span>
+            <button id="copy-link-btn" class="mini-btn">Copy Link</button>
+          </div>
+          <div class="connected-players-box">
+            <div class="panel-subtitle">Connected Players:</div>
+            <ul id="connected-players-list">
+              <li>You (Host)</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Join Room UI panel -->
+        <div id="join-panel" class="lobby-sub-panel hidden">
+          <div class="input-group">
+            <label class="input-label" for="room-input">Room Code</label>
+            <input type="text" id="room-input" placeholder="e.g. 1234" maxlength="6" autocomplete="off">
+          </div>
+          <div id="connection-status" class="connection-status"></div>
         </div>
 
         <button id="start-btn" class="play-btn glow-effect">Enter Arena</button>
