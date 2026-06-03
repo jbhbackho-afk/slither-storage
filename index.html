@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NeonSlither.io - Glow and Grow</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="game-container">
+    <!-- Main Game Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- HUD: Stats (Top Left) -->
+    <div id="hud-stats" class="hud-element glass-panel">
+      <div class="stat-item">
+        <div class="stat-label">Mass (Length)</div>
+        <div id="stat-mass" class="stat-value">10</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Kills</div>
+        <div id="stat-kills" class="stat-value magenta">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Rank</div>
+        <div id="stat-rank" class="stat-value">--/--</div>
+      </div>
+    </div>
+
+    <!-- HUD: Powerups (Below Stats) -->
+    <div id="hud-powerups" class="hud-element">
+      <!-- Dynamic active power-up badges will go here -->
+    </div>
+
+    <!-- HUD: Leaderboard (Top Right) -->
+    <div id="hud-leaderboard" class="hud-element glass-panel">
+      <div class="leaderboard-title">
+        <span>Leaderboard</span>
+        <span id="player-count">0 Arena</span>
+      </div>
+      <ol id="leaderboard-list" class="leaderboard-list">
+        <!-- Dynamic Leaderboard Items will be populated here -->
+      </ol>
+    </div>
+
+    <!-- HUD: Kill/Feed Alert (Bottom Center) -->
+    <div id="kill-feed" class="hud-element">
+      <!-- Dynamic notifications like "Player killed Bot" -->
+    </div>
+
+    <!-- HUD: Minimap (Bottom Right) -->
+    <div id="hud-minimap" class="hud-element">
+      <canvas id="minimap-canvas" width="128" height="128"></canvas>
+    </div>
+
+    <!-- HUD: Desktop Control Tips (Bottom Left) -->
+    <div id="desktop-controls-info" class="hud-element">
+      <div><span class="key-badge">Mouse</span> Move direction</div>
+      <div><span class="key-badge">Left-Click</span> Speed Dash</div>
+    </div>
+
+    <!-- HUD: Mobile Controls (Only visible on Touch Devices) -->
+    <div id="mobile-controls">
+      <div id="joystick-container">
+        <div id="joystick-knob"></div>
+      </div>
+      <div id="boost-button">BOOST</div>
+    </div>
+
+    <!-- Screen overlay: Pre-game Lobby -->
+    <div id="menu-screen">
+      <div class="menu-box glass-panel">
+        <h1 class="logo">Neon Slither</h1>
+        
+        <div class="input-group">
+          <label class="input-label" for="nickname-input">Worm Name</label>
+          <input type="text" id="nickname-input" placeholder="Wormy" maxlength="12" autocomplete="off" value="Wormy">
+        </div>
+
+        <div class="skin-selector">
+          <label class="input-label">Select Neon Skin</label>
+          <div class="skins-grid" id="skins-grid">
+            <div class="skin-option selected" data-skin="0" style="background: linear-gradient(135deg, #00f0ff, #0072ff);"></div>
+            <div class="skin-option" data-skin="1" style="background: linear-gradient(135deg, #ff007f, #7f00ff);"></div>
+            <div class="skin-option" data-skin="2" style="background: linear-gradient(135deg, #39ff14, #00a86b);"></div>
+            <div class="skin-option" data-skin="3" style="background: linear-gradient(135deg, #fff01f, #ff6c00);"></div>
+            <div class="skin-option" data-skin="4" style="background: linear-gradient(135deg, #00f0ff, #ff007f);"></div>
+            <div class="skin-option" data-skin="5" style="background: linear-gradient(135deg, #ffffff, #8a9ba8);"></div>
+          </div>
+        </div>
+
+        <button id="start-btn" class="play-btn glow-effect">Enter Arena</button>
+
+        <div class="instructions">
+          <p>🎯 다른 지렁이 몸통에 머리를 부딪치게 해 처치하세요!</p>
+          <p>⚡ 마우스 왼쪽 클릭(혹은 BOOST)으로 가속할 수 있습니다. (길이 단축)</p>
+          <p>🧲 <b>자석 (보라색)</b>: 주변 양분을 빨아들입니다. (8초)</p>
+          <p>🛡️ <b>보호막 (하늘색)</b>: 다른 지렁이 몸통을 안전하게 통과합니다. (8초)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen overlay: Game Over -->
+    <div id="game-over-screen">
+      <div class="game-over-box glass-panel">
+        <h2 class="game-over-title">Crashed</h2>
+        
+        <table class="results-table">
+          <tr class="results-row">
+            <td class="results-label">Final Mass (Length)</td>
+            <td id="res-mass" class="results-val cyan">0</td>
+          </tr>
+          <tr class="results-row">
+            <td class="results-label">Snakes Destroyed</td>
+            <td id="res-kills" class="results-val yellow">0</td>
+          </tr>
+          <tr class="results-row">
+            <td class="results-label">Time Survived</td>
+            <td id="res-time" class="results-val">0s</td>
+          </tr>
+        </table>
+
+        <button id="restart-btn" class="play-btn glow-effect">Re-enter Arena</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>
