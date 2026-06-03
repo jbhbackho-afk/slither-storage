@@ -315,7 +315,7 @@ class SlitherGame {
     if (this.multiplayerMode === 'client') {
       if (!this.connToHost || !this.connToHost.open) {
         const roomInput = document.getElementById('room-input');
-        const code = this.currentRoomCode || (roomInput ? roomInput.value.trim() : '');
+        const code = (roomInput && roomInput.value.trim()) ? roomInput.value.trim() : this.currentRoomCode;
         if (!code) {
           alert('Please enter a Room Code!');
           return;
@@ -1173,6 +1173,10 @@ class SlitherGame {
   
   drawFood(ctx) {
     for (let f of this.food) {
+      if (f.pulseVal === undefined) f.pulseVal = Math.random() * Math.PI;
+      if (f.pulseSpeed === undefined) f.pulseSpeed = 0.02 + Math.random() * 0.03;
+      if (f.glowIntensity === undefined) f.glowIntensity = 0.5 + Math.random() * 0.5;
+      
       f.pulseVal += f.pulseSpeed;
       const currentRadius = f.radius + Math.sin(f.pulseVal) * 1.2;
       
@@ -1198,6 +1202,10 @@ class SlitherGame {
 
   drawItems(ctx) {
     for (let item of this.items) {
+      if (item.pulseVal === undefined) item.pulseVal = Math.random() * Math.PI;
+      if (item.pulseSpeed === undefined) item.pulseSpeed = 0.04;
+      if (item.rotation === undefined) item.rotation = Math.random() * Math.PI * 2;
+      
       item.pulseVal += item.pulseSpeed;
       item.rotation += 0.025;
       const currentRadius = item.radius + Math.sin(item.pulseVal) * 1.8;
